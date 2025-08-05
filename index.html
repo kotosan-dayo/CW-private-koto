@@ -592,6 +592,7 @@
 
             userName = usernameInput.value.trim();
             const password = passwordInput.value;
+            console.log("handleLogin: userName set to", userName); // デバッグログ
 
             // ユーザー名が空の場合のエラーハンドリング
             if (userName === '') {
@@ -618,6 +619,7 @@
                     await saveUserPresence(iconToSave);
                     userIconUrl = iconToSave; // グローバルステートを更新
                     renderChatScreen(); // アイコン処理後にチャット画面をレンダリング
+                    setupChatListeners(); // ログイン成功後にリスナーを設定
                 };
                 reader.readAsDataURL(userIconFile);
             } else if (!userIconPreviewUrl && userIconUrl) { // アイコンがクリアされた場合
@@ -625,11 +627,13 @@
                 await saveUserPresence(iconToSave);
                 userIconUrl = iconToSave; // グローバルステートを更新
                 renderChatScreen();
+                setupChatListeners(); // ログイン成功後にリスナーを設定
             } else {
                 // 新しいアイコンが選択されず、既存のアイコンもクリアされていない場合
                 await saveUserPresence(iconToSave);
                 userIconUrl = iconToSave; // グローバルステートを更新
                 renderChatScreen();
+                setupChatListeners(); // ログイン成功後にリスナーを設定
             }
         }
 
@@ -664,12 +668,12 @@
             const messageText = messageInputElem.value.trim();
 
             console.log("handleSendMessageが呼び出されました。");
-            console.log("現在のdb:", db);
-            console.log("現在のuserId:", userId);
-            console.log("現在のuserName:", userName);
-            console.log("メッセージテキスト:", messageText);
-            console.log("画像ファイルが選択されていますか:", !!messageImageFile);
-            console.log("ユーザーアイコンURL:", userIconUrl);
+            console.log("Current db:", db);
+            console.log("Current userId:", userId);
+            console.log("Current userName:", userName); // この値が空でないか確認してください
+            console.log("Message text:", messageText);
+            console.log("Image file selected:", !!messageImageFile);
+            console.log("User icon URL:", userIconUrl);
 
             // Firebaseが準備できていない、またはユーザーがログインしていない場合はメッセージを送信しない
             if (!db || !userId || !userName) {
@@ -1193,6 +1197,43 @@
             }
         }
 
+        /**
+         * チャット関連のFirestoreリスナーを設定する関数。
+         * db、userId、userNameがすべて準備できてから呼び出される。
+         */
+        function setupChatListeners() {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            // リスナー設定前に必要な変数が揃っているか最終確認
+            if (!db || !userId || !userName) {
+                console.warn("チャットリスナーを設定できません: Firebase、userId、またはuserNameが準備できていません。");
+                return;
+            }
+            console.log("setupChatListeners: チャットリスナーが設定されました。"); // デバッグログ
+
+            // メッセージリスナー
+            const messagesCollectionRef = collection(db, `artifacts/${appId}/public/data/messages`);
+            onSnapshot(query(messagesCollectionRef, orderBy('timestamp', 'asc')), (snapshot) => {
+                messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderChatMessages();
+            }, (error) => {
+                console.error("メッセージの取得エラー:", error);
+            });
+
+            // オンラインユーザーリスナー
+            const activeUsersCollectionRef = collection(db, `artifacts/${appId}/public/data/activeUsers`);
+            onSnapshot(activeUsersCollectionRef, (snapshot) => {
+                window.activeUsers = snapshot.docs.map(doc => doc.data());
+                if (activeUsersModal.classList.contains('hidden')) {
+                    document.getElementById('online-users-count').textContent = window.activeUsers.length;
+                } else {
+                    renderActiveUsers();
+                }
+            }, (error) => {
+                console.error("オンラインユーザーの取得エラー:", error);
+            });
+        }
+
         // --- 初期化 ---
         document.addEventListener('DOMContentLoaded', async () => {
             applyTheme(); // bodyとルートコンテナに初期テーマを適用
@@ -1233,6 +1274,7 @@
                         userName = fetchedUserName; // グローバル変数にユーザー名を割り当て
                         userIconUrl = fetchedUserIconUrl;
                         userIconPreviewUrl = userIconUrl; // 設定/ログイン用のプレビューを設定
+                        console.log("onAuthStateChanged: userName set to", userName); // デバッグログ
 
                         // ユーザー名がまだ空の場合、ログイン画面をレンダリングして名前入力を強制
                         if (!userName) {
@@ -1241,28 +1283,7 @@
                         }
                         
                         renderChatScreen(); // ユーザー名が設定されていることを確認してからチャット画面をレンダリング
-                        
-                        // 認証準備完了後、Firestoreリスナーを設定
-                        const messagesCollectionRef = collection(db, `artifacts/${appId}/public/data/messages`);
-                        onSnapshot(query(messagesCollectionRef, orderBy('timestamp', 'asc')), (snapshot) => {
-                            messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            renderChatMessages();
-                        }, (error) => {
-                            console.error("メッセージの取得エラー:", error);
-                        });
-
-                        const activeUsersCollectionRef = collection(db, `artifacts/${appId}/public/data/activeUsers`);
-                        onSnapshot(activeUsersCollectionRef, (snapshot) => {
-                            window.activeUsers = snapshot.docs.map(doc => doc.data()); // window.activeUsersに割り当て
-                            if (activeUsersModal.classList.contains('hidden')) {
-                                // モーダルが非表示の場合のみカウントを更新し、リストの頻繁な再レンダリングを避ける
-                                document.getElementById('online-users-count').textContent = window.activeUsers.length; // window.activeUsersを使用
-                            } else {
-                                renderActiveUsers(); // モーダルが開いている場合は再レンダリング
-                            }
-                        }, (error) => {
-                            console.error("オンラインユーザーの取得エラー:", error);
-                        });
+                        setupChatListeners(); // 認証とユーザー名確認後にリスナーを設定
 
                     } else {
                         // ユーザーがサインアウトしている場合、匿名またはカスタムトークンでサインインを試みる
