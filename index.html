@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>グループチャット</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* 基本フォント設定 */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* カスタムスクロールバースタイル */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* ダークモード時のスクロールバースタイル */
+        html.dark .custom-scrollbar::-webkit-scrollbar-track {
+            background: #4a5568;
+        }
+        html.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #a0aec0;
+        }
+        html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #cbd5e0;
+        }
+
+        /* モーダル表示時のスケールインアニメーション */
+        @keyframes scale-in {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .animate-scale-in {
+            animation: scale-in 0.3s ease-out forwards;
+        }
+
+        /* ダークモード時の背景グラデーション */
+        html.dark .dark-mode-bg {
+            background: linear-gradient(to bottom right, #2d3748, #1a202c);
+        }
+
+        /* テーマ切り替えトグルスイッチのCSS */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            -webkit-transition: .4s;
+            transition: .4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            -webkit-transition: .4s;
+            transition: .4s;
+        }
+
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        input:focus + .slider {
+            box-shadow: 0 0 1px #2196F3;
+        }
+
+        input:checked + .slider:before {
+            -webkit-transform: translateX(26px);
+            -ms-transform: translateX(26px);
+            transform: translateX(26px);
+        }
+
+        /* スイッチの丸み */
+        .slider.round {
+            border-radius: 34px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 font-inter transition-colors duration-700 ease-in-out bg-gradient-to-br from-blue-100 to-purple-200">
+    <div id="app-root" class="shadow-2xl w-full flex flex-col max-w-2xl h-[80vh] rounded-3xl p-4 bg-white">
+        <!-- JavaScriptによってコンテンツがここにレンダリングされます -->
+    </div>
+
+    <!-- モーダルウィンドウ (初期状態では非表示) -->
+    <!-- ログアウト確認ダイアログ -->
+    <div id="logout-confirm-modal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300">
+        <div class="p-6 rounded-lg shadow-xl text-center transform transition-transform duration-300 scale-95 opacity-0 animate-scale-in">
+            <p class="text-lg font-semibold mb-4">本当にログアウトしますか？</p>
+            <div class="flex justify-center gap-4">
+                <button id="confirm-logout-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                    はい
+                </button>
+                <button id="cancel-logout-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                    いいえ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- オンラインユーザーモーダル -->
+    <div id="active-users-modal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300">
+        <div class="p-6 rounded-lg shadow-xl text-center transform transition-transform duration-300 scale-95 opacity-0 animate-scale-in max-h-[80vh] overflow-y-auto w-80">
+            <h2 class="text-xl font-bold mb-4">オンラインユーザー (<span id="active-users-count">0</span>人)</h2>
+            <ul id="active-users-list" class="text-left">
+                <!-- オンラインユーザーがここに表示されます -->
+            </ul>
+            <button id="close-active-users-modal-btn" class="mt-6 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                閉じる
+            </button>
+        </div>
+    </div>
+
+    <!-- 設定モーダル -->
+    <div id="settings-modal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300">
+        <div class="p-6 rounded-lg shadow-xl text-center transform transition-transform duration-300 scale-95 opacity-0 animate-scale-in max-w-lg w-full max-h-[90vh] overflow-y-auto relative">
+            <h2 class="text-xl font-bold mb-4">設定</h2>
+            <button id="close-settings-modal-btn" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" title="閉じる">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+
+            <!-- ユーザー名変更セクション -->
+            <div class="mb-6">
+                <label for="new-username-input" class="block text-sm font-bold mb-2 text-left">
+                    新しいユーザー名:
+                </label>
+                <input type="text" id="new-username-input" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 text-base mb-3" placeholder="新しいユーザー名を入力" />
+                <button id="update-username-btn" class="font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 bg-blue-500 hover:bg-blue-600 text-white w-full">
+                    ユーザー名を更新
+                </button>
+            </div>
+
+            <!-- ユーザーアイコン変更セクション -->
+            <div class="mb-6">
+                <label for="settings-user-icon-upload" class="block text-sm font-bold mb-2 text-left">
+                    ユーザーアイコン:
+                </label>
+                <div class="flex items-center justify-center mb-3">
+                    <img id="settings-user-icon-preview" src="" alt="アイコンプレビュー" class="hidden h-20 w-20 rounded-full object-cover border-2 border-gray-300" />
+                    <div id="settings-default-user-icon" class="h-20 w-20 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-300">
+                        <!-- デフォルトユーザーアイコンSVG -->
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a4 4 0 00-4 4h8a4 4 0 00-4-4z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+                <input type="file" accept="image/*" class="hidden" id="settings-user-icon-upload" />
+                <label for="settings-user-icon-upload" class="font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 bg-purple-500 hover:bg-purple-600 text-white flex-shrink-0 w-full mb-2 text-sm">
+                    アイコンを選択
+                </label>
+                <button id="clear-settings-user-icon-btn" class="hidden bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 w-full">
+                    アイコンをクリア
+                </button>
+                <button id="update-icon-btn" class="mt-3 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 w-full">
+                    アイコンを更新
+                </button>
+            </div>
+
+            <!-- テーマ切り替えセクション -->
+            <div class="mb-6">
+                <label class="block text-sm font-bold mb-2 text-left">
+                    テーマ:
+                </label>
+                <div class="flex justify-center items-center gap-4">
+                    <span class="text-gray-800 dark:text-gray-300">ライト</span>
+                    <label class="switch">
+                        <input type="checkbox" id="theme-toggle-switch" />
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="text-gray-800 dark:text-gray-300">ダーク</span>
+                </div>
+            </div>
+
+            <!-- ローカルチャット履歴クリアボタン -->
+            <div class="mb-6">
+                <button id="clear-local-chat-btn" class="font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 bg-yellow-500 hover:bg-yellow-600 text-white w-full">
+                    ローカルチャット履歴をクリア
+                </button>
+            </div>
+
+            <button id="close-settings-bottom-btn" class="mt-4 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                閉じる
+            </button>
+        </div>
+    </div>
+
+    <!-- カスタムメッセージボックス -->
+    <div id="custom-message-box" class="hidden fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300">
+        <div class="p-6 rounded-lg shadow-xl text-center transform transition-transform duration-300 scale-95 opacity-0 animate-scale-in max-w-sm w-full bg-white text-gray-800">
+            <p id="custom-message-text" class="text-lg font-semibold mb-4"></p>
+            <button id="custom-message-ok-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                OK
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // Firebase関連のモジュールをインポート
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, setDoc, deleteDoc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // グローバル変数：Firebaseインスタンスとユーザーデータ
+        let app = null;
+        let db = null;
+        let auth = null;
+        let userId = '';
+        let userName = '';
+        let userIconUrl = '';
+        let messages = [];
+        // activeUsersをwindowプロパティとして初期化し、グローバルスコープでアクセス可能にする
+        window.activeUsers = []; 
+        let isAuthReady = false;
+        let theme = localStorage.getItem('chat-theme') || 'light'; // localStorageからテーマを初期化
+
+        // DOM要素の取得
+        const appRoot = document.getElementById('app-root');
+        const logoutConfirmModal = document.getElementById('logout-confirm-modal');
+        const confirmLogoutBtn = document.getElementById('confirm-logout-btn');
+        const cancelLogoutBtn = document.getElementById('cancel-logout-btn');
+        const activeUsersModal = document.getElementById('active-users-modal');
+        const activeUsersCount = document.getElementById('active-users-count');
+        const activeUsersList = document.getElementById('active-users-list');
+        const closeActiveUsersModalBtn = document.getElementById('close-active-users-modal-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeSettingsModalBtn = document.getElementById('close-settings-modal-btn');
+        const closeSettingsBottomBtn = document.getElementById('close-settings-bottom-btn');
+        const newUserNameInput = document.getElementById('new-username-input');
+        const updateUsernameBtn = document.getElementById('update-username-btn');
+        const settingsUserIconUpload = document.getElementById('settings-user-icon-upload');
+        const settingsUserIconPreview = document.getElementById('settings-user-icon-preview');
+        const settingsDefaultUserIcon = document.getElementById('settings-default-user-icon');
+        const clearSettingsUserIconBtn = document.getElementById('clear-settings-user-icon-btn');
+        const updateIconBtn = document.getElementById('update-icon-btn');
+        const themeToggleSwitch = document.getElementById('theme-toggle-switch');
+        const clearLocalChatBtn = document.getElementById('clear-local-chat-btn');
+
+        // カスタムメッセージボックスの要素
+        const customMessageBox = document.getElementById('custom-message-box');
+        const customMessageText = document.getElementById('custom-message-text');
+        const customMessageOkBtn = document.getElementById('custom-message-ok-btn');
+
+        let messageImageFile = null; // メッセージに添付する画像ファイル
+        let userIconFile = null;     // ユーザーのプロフィールアイコンファイル
+        let userIconPreviewUrl = ''; // ログイン/設定画面のユーザーアイコンプレビューURL
+
+        const CORRECT_PASSWORD = 'kotochat'; // 正しいパスワード (本番環境ではサーバーサイドで管理すべきです)
+        const MAX_FILE_SIZE_BYTES = 500 * 1024; // 画像ファイルの最大サイズ (500 KB)
+
+        /**
+         * テーマ（ライト/ダーク）をUIに適用するヘルパー関数。
+         * HTML要素のクラスを動的に変更し、CSS変数を更新します。
+         */
+        function applyTheme() {
+            // html要素に'dark'クラスをトグルし、Tailwind CSSのダークモードを有効/無効にする
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+            const body = document.body;
+            // bodyの背景グラデーションをテーマに応じて変更
+            if (theme === 'dark') {
+                body.classList.remove('bg-gradient-to-br', 'from-blue-100', 'to-purple-200');
+                body.classList.add('dark-mode-bg');
+            } else {
+                body.classList.remove('dark-mode-bg');
+                body.classList.add('bg-gradient-to-br', 'from-blue-100', 'to-purple-200');
+            }
+            // モーダルの背景色とテキスト色をテーマに応じて更新
+            const modals = [logoutConfirmModal, activeUsersModal, settingsModal, customMessageBox]; 
+            modals.forEach(modal => {
+                const innerDiv = modal.querySelector('div:first-child');
+                if (innerDiv) {
+                    if (theme === 'dark') {
+                        innerDiv.classList.remove('bg-white', 'text-gray-800');
+                        innerDiv.classList.add('bg-gray-700', 'text-gray-100');
+                    } else {
+                        innerDiv.classList.remove('bg-gray-700', 'text-gray-100');
+                        innerDiv.classList.add('bg-white', 'text-gray-800');
+                    }
+                }
+            });
+
+            // モーダル内の入力フィールドのスタイルをテーマに応じて更新
+            const modalInputs = settingsModal.querySelectorAll('input[type="text"], input[type="password"]');
+            modalInputs.forEach(input => {
+                if (theme === 'dark') {
+                    input.classList.remove('bg-white', 'border-gray-300', 'text-gray-800', 'focus:ring-blue-500');
+                    input.classList.add('bg-gray-800', 'border-gray-600', 'text-white', 'placeholder-gray-400', 'focus:ring-blue-400');
+                } else {
+                    input.classList.remove('bg-gray-800', 'border-gray-600', 'text-white', 'placeholder-gray-400', 'focus:ring-blue-400');
+                    input.classList.add('bg-white', 'border-gray-300', 'text-gray-800', 'focus:ring-blue-500');
+                }
+            });
+
+            // モーダル内のラベルのスタイルをテーマに応じて更新
+            const modalLabels = settingsModal.querySelectorAll('label');
+            modalLabels.forEach(label => {
+                if (theme === 'dark') {
+                    label.classList.remove('text-gray-700');
+                    label.classList.add('text-gray-300');
+                } else {
+                    label.classList.remove('text-gray-300');
+                    label.classList.add('text-gray-700');
+                }
+            });
+
+            // テーマ切り替えテキストのスタイルをテーマに応じて更新
+            const themeSpans = settingsModal.querySelectorAll('.flex.justify-center.items-center.gap-4 span');
+            themeSpans.forEach(span => {
+                if (theme === 'dark') {
+                    span.classList.remove('text-gray-800');
+                    span.classList.add('text-gray-300');
+                } else {
+                    span.classList.remove('text-gray-300');
+                    span.classList.add('text-gray-800');
+                }
+            });
+
+            // チャットメッセージエリアの背景色をテーマに応じて更新
+            const chatMessageBox = document.getElementById('chat-message-box');
+            if (chatMessageBox) {
+                chatMessageBox.classList.remove('bg-gray-700', 'bg-gray-50');
+                chatMessageBox.classList.add(theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50');
+            }
+
+            // 画像プレビューコンテナのテーマを更新
+            const imagePreviewContainer = document.getElementById('image-preview-container');
+            const messageImageFilename = document.getElementById('message-image-filename');
+            if (imagePreviewContainer && !imagePreviewContainer.classList.contains('hidden')) {
+                if (theme === 'dark') {
+                    imagePreviewContainer.classList.remove('bg-gray-100', 'border-gray-200');
+                    imagePreviewContainer.classList.add('bg-gray-800', 'border-gray-700');
+                    messageImageFilename.classList.remove('text-gray-700');
+                    messageImageFilename.classList.add('text-gray-300');
+                } else {
+                    imagePreviewContainer.classList.remove('bg-gray-800', 'border-gray-700');
+                    imagePreviewContainer.classList.add('bg-gray-100', 'border-gray-200');
+                    messageImageFilename.classList.remove('text-gray-300');
+                    messageImageFilename.classList.add('text-gray-700');
+                }
+            }
+        }
+
+        // デフォルトユーザーアイコンのSVG HTML文字列
+        const defaultUserIconSVG = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a4 4 0 00-4 4h8a4 4 0 00-4-4z" clip-rule="evenodd" />
+            </svg>
+        `;
+
+        /**
+         * カスタムメッセージボックスを表示する関数。
+         * @param {string} message - 表示するメッセージテキスト。
+         */
+        function showMessageBox(message) {
+            customMessageText.textContent = message;
+            customMessageBox.classList.remove('hidden');
+            customMessageBox.querySelector('div:first-child').classList.add('animate-scale-in');
+            applyTheme(); // メッセージボックスにテーマが正しく適用されるようにする
+        }
+
+        /**
+         * カスタムメッセージボックスを非表示にする関数。
+         */
+        function hideMessageBox() {
+            customMessageBox.classList.add('hidden');
+            customMessageBox.querySelector('div:first-child').classList.remove('animate-scale-in');
+        }
+
+        /**
+         * ログイン画面をレンダリングする関数。
+         */
+        function renderLoginScreen() {
+            appRoot.className = `shadow-2xl w-full flex flex-col max-w-2xl h-[80vh] rounded-3xl p-4 ${theme === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-800'}`;
+            appRoot.innerHTML = `
+                <h1 class="text-2xl font-extrabold mb-2 text-center ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}">グループチャット</h1>
+                <div class="flex flex-col items-center justify-center flex-grow relative p-4 sm:p-6 md:p-8">
+                    <p class="text-lg mb-6 text-center ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}">チャットに参加するために名前とパスワードを入力してください</p>
+                    
+                    <!-- ログイン画面でのユーザーアイコン選択 -->
+                    <div class="mb-6 text-center w-full max-w-xs">
+                        <label for="login-user-icon-upload" class="block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}">
+                            あなたのアイコン:
+                        </label>
+                        <div class="flex items-center justify-center mb-3">
+                            <img id="login-user-icon-preview" src="${userIconPreviewUrl}" alt="アイコンプレビュー" class="${userIconPreviewUrl ? '' : 'hidden'} h-24 w-24 rounded-full object-cover border-2 border-gray-300 shadow-md" />
+                            <div id="login-default-user-icon" class="${userIconPreviewUrl ? 'hidden' : ''} h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-300 shadow-md">
+                                ${defaultUserIconSVG}
+                            </div>
+                        </div>
+                        <input type="file" accept="image/*" class="hidden" id="login-user-icon-upload" />
+                        <label for="login-user-icon-upload" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-shrink-0 w-full mb-2 text-sm">
+                            アイコンを選択
+                        </label>
+                        <button id="clear-login-user-icon-btn" class="${userIconPreviewUrl ? '' : 'hidden'} bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 w-full text-sm">
+                            アイコンをクリア
+                        </button>
+                    </div>
+
+                    <input type="text" id="username-input" placeholder="あなたの名前" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 text-base mb-3 text-center ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-400' : 'bg-white border-gray-300 text-gray-800 focus:ring-blue-500'}" />
+                    <input type="password" id="password-input" placeholder="パスワード" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 text-base mb-4 text-center ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:ring-blue-400' : 'bg-white border-gray-300 text-gray-800 focus:ring-blue-500'}" />
+                    <p id="password-error" class="text-red-500 text-sm mb-4 hidden"></p>
+                    <button id="login-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                        チャットに参加
+                    </button>
+
+                    <p class="absolute bottom-4 left-4 text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}">
+                        Made by Gemini
+                    </p>
+                </div>
+            `;
+            attachLoginEventListeners(); // イベントリスナーをアタッチ
+            applyTheme(); // 動的にレンダリングされた要素にテーマを再適用
+        }
+
+        /**
+         * チャット画面をレンダリングする関数。
+         */
+        function renderChatScreen() {
+            appRoot.className = `shadow-2xl w-full flex flex-col transition-all duration-700 ease-in-out max-w-full h-screen rounded-none p-0 ${theme === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-800'}`;
+            appRoot.innerHTML = `
+                <div class="flex justify-between items-center px-4 py-3 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'} text-sm sm:text-base">
+                    <p class="${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}">
+                        あなたのユーザーID: <span class="font-semibold text-blue-700">${userId}</span>
+                    </p>
+                    <p class="${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}">
+                        あなたの名前: <span class="font-semibold text-purple-700">${userName}</span>
+                    </p>
+                    <p class="${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}">
+                        オンライン: <span class="font-semibold text-green-600 cursor-pointer" id="online-users-count">0</span>人
+                    </p>
+                    <div class="flex gap-2">
+                        <button id="settings-btn" class="bg-gray-500 hover:bg-gray-600 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105" title="設定">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 15.375a3.375 3.375 0 100-6.75 3.375 3.375 0 000 6.75z" />
+                                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM14.25 12a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zM12 3.75a.75.75 0 01.75.75v.75a.75.75 0 01-1.5 0V4.5a.75.75 0 01.75-.75zM4.5 12a.75.75 0 01.75-.75h.75a.75.75 0 010 1.5H5.25a.75.75 0 01-.75-.75zM12 19.5a.75.75 0 01-.75-.75v-.75a.75.75 0 011.5 0v.75a.75.75 0 01-.75.75zM19.5 12a.75.75 0 01-.75-.75h-.75a.75.75 0 010 1.5h.75a.75.75 0 01.75-.75zM6.75 6.75a.75.75 0 01-.75-.75V5.25a.75.75 0 011.5 0v.75a.75.75 0 01-.75.75zM17.25 6.75a.75.75 0 01-.75-.75V5.25a.75.75 0 011.5 0v.75a.75.75 0 01-.75.75zM6.75 17.25a.75.75 0 01-.75-.75v-.75a.75.75 0 011.5 0v.75a.75.75 0 01-.75.75zM17.25 17.25a.75.75 0 01-.75-.75v-.75a.75.75 0 011.5 0v.75a.75.75 0 01-.75.75z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                        <button id="logout-btn" class="bg-red-500 hover:bg-red-600 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                            ログアウト
+                        </button>
+                    </div>
+                </div>
+
+                <div id="chat-message-box" class="flex-grow overflow-y-auto px-4 py-4 rounded-lg mb-3 shadow-inner custom-scrollbar relative ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}">
+                    <!-- メッセージがここにレンダリングされます -->
+                </div>
+
+                <div class="relative px-4 pb-4">
+                    <button id="scroll-to-bottom-btn" class="hidden absolute bottom-[calc(4rem+0.5rem)] right-4 bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-full shadow-lg transition-all duration-300 transform hover:scale-110 focus:outline-none z-10" title="最新のメッセージへ">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <div class="flex flex-col gap-2">
+                        <div id="image-preview-container" class="hidden flex items-center gap-2 p-2 rounded-lg border">
+                            <img id="message-image-preview" src="" alt="プレビュー" class="h-16 w-16 object-cover rounded-md" />
+                            <span id="message-image-filename" class="text-sm truncate"></span>
+                            <button id="clear-image-selection-btn" class="ml-auto text-red-500 hover:text-red-700 focus:outline-none p-1 rounded-full hover:bg-gray-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="flex gap-3 items-center">
+                            <input type="file" accept="image/*" class="hidden" id="image-upload" />
+                            <label for="image-upload" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-shrink-0" title="画像を添付">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                            </label>
+                            <input type="text" id="message-input" placeholder="メッセージを入力..." class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 text-base flex-grow" />
+                            <button id="send-message-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-shrink-0">
+                                送信
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            attachChatEventListeners(); // イベントリスナーをアタッチ
+            applyTheme(); // 動的にレンダリングされた要素にテーマを再適用
+            scrollToBottom(); // チャット画面読み込み時に一番下までスクロール
+        }
+
+        // --- イベントリスナーとハンドラ ---
+
+        /**
+         * ログイン画面のイベントリスナーをアタッチする関数。
+         */
+        function attachLoginEventListeners() {
+            document.getElementById('login-btn').onclick = handleLogin;
+            document.getElementById('username-input').onkeypress = (e) => { if (e.key === 'Enter') handleLogin(); };
+            document.getElementById('password-input').onkeypress = (e) => { if (e.key === 'Enter') handleLogin(); };
+            document.getElementById('login-user-icon-upload').onchange = handleUserIconSelect;
+            document.getElementById('clear-login-user-icon-btn').onclick = clearUserIconSelection;
+        }
+
+        /**
+         * チャット画面のイベントリスナーをアタッチする関数。
+         */
+        function attachChatEventListeners() {
+            document.getElementById('logout-btn').onclick = () => logoutConfirmModal.classList.remove('hidden');
+            confirmLogoutBtn.onclick = performLogout;
+            cancelLogoutBtn.onclick = () => logoutConfirmModal.classList.add('hidden');
+
+            document.getElementById('online-users-count').onclick = showActiveUsersModal;
+            closeActiveUsersModalBtn.onclick = () => activeUsersModal.classList.add('hidden');
+
+            document.getElementById('settings-btn').onclick = showSettingsModalHandler;
+            closeSettingsModalBtn.onclick = () => settingsModal.classList.add('hidden');
+            closeSettingsBottomBtn.onclick = () => settingsModal.classList.add('hidden');
+
+            newUserNameInput.oninput = (e) => newUserNameInput.value = e.target.value; // 入力値のリアルタイム更新
+            updateUsernameBtn.onclick = handleUpdateProfile;
+            settingsUserIconUpload.onchange = handleUserIconSelect;
+            clearSettingsUserIconBtn.onclick = clearUserIconSelection;
+            updateIconBtn.onclick = handleUpdateProfile;
+            themeToggleSwitch.onchange = toggleTheme;
+            clearLocalChatBtn.onclick = handleClearLocalChat;
+
+            document.getElementById('send-message-btn').onclick = handleSendMessage;
+            document.getElementById('message-input').onkeypress = (e) => { if (e.key === 'Enter') handleSendMessage(); };
+            document.getElementById('image-upload').onchange = handleImageSelect;
+            document.getElementById('clear-image-selection-btn').onclick = clearImageSelection;
+
+            const chatMessageBox = document.getElementById('chat-message-box');
+            if (chatMessageBox) {
+                chatMessageBox.onscroll = handleScroll;
+            }
+            document.getElementById('scroll-to-bottom-btn').onclick = scrollToBottom;
+
+            // カスタムメッセージボックスのOKボタンにイベントリスナーをアタッチ
+            customMessageOkBtn.onclick = hideMessageBox;
+        }
+
+        /**
+         * ログイン処理を行う関数。
+         * ユーザー名とパスワードを検証し、認証後にチャット画面をレンダリングします。
+         */
+        async function handleLogin() {
+            const usernameInput = document.getElementById('username-input');
+            const passwordInput = document.getElementById('password-input');
+            const passwordErrorElem = document.getElementById('password-error');
+
+            userName = usernameInput.value.trim();
+            const password = passwordInput.value;
+
+            // ユーザー名が空の場合のエラーハンドリング
+            if (userName === '') {
+                passwordErrorElem.textContent = '名前を入力してください。';
+                passwordErrorElem.classList.remove('hidden');
+                return;
+            }
+            // パスワードが正しくない場合のエラーハンドリング
+            if (password !== CORRECT_PASSWORD) {
+                passwordErrorElem.textContent = 'パスワードが正しくありません。';
+                passwordErrorElem.classList.remove('hidden');
+                return;
+            }
+
+            passwordErrorElem.classList.add('hidden'); // 以前のエラーメッセージをクリア
+
+            // ログイン時のユーザーアイコン保存処理
+            let iconToSave = userIconUrl; // 設定から事前に取得したユーザーアイコンURLをデフォルトとする
+            if (userIconFile) {
+                // 新しいアイコンファイルが選択された場合、Base64に変換して保存
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    iconToSave = reader.result;
+                    await saveUserPresence(iconToSave);
+                    userIconUrl = iconToSave; // グローバルステートを更新
+                    renderChatScreen(); // アイコン処理後にチャット画面をレンダリング
+                };
+                reader.readAsDataURL(userIconFile);
+            } else if (!userIconPreviewUrl && userIconUrl) { // アイコンがクリアされた場合
+                iconToSave = '';
+                await saveUserPresence(iconToSave);
+                userIconUrl = iconToSave; // グローバルステートを更新
+                renderChatScreen();
+            } else {
+                // 新しいアイコンが選択されず、既存のアイコンもクリアされていない場合
+                await saveUserPresence(iconToSave);
+                userIconUrl = iconToSave; // グローバルステートを更新
+                renderChatScreen();
+            }
+        }
+
+        /**
+         * ユーザーのオンライン状態とプロフィールをFirestoreに保存する関数。
+         * @param {string} icon - ユーザーアイコンのBase64 URL。
+         */
+        async function saveUserPresence(icon) {
+            if (!db || !userId) {
+                console.warn("FirestoreまたはuserIdが準備できていません。");
+                return;
+            }
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const usersCollectionRef = collection(db, `artifacts/${appId}/public/data/activeUsers`);
+            try {
+                // ユーザーの存在情報をFirestoreに設定または更新
+                await setDoc(doc(usersCollectionRef, userId), {
+                    userName: userName,
+                    userIconUrl: icon,
+                    lastActive: serverTimestamp()
+                }, { merge: true });
+            } catch (error) {
+                console.error("ユーザーの存在設定エラー:", error);
+            }
+        }
+
+        /**
+         * メッセージを送信する関数。テキストメッセージと画像メッセージの両方をサポートします。
+         */
+        async function handleSendMessage() {
+            const messageInputElem = document.getElementById('message-input');
+            const messageText = messageInputElem.value.trim();
+
+            console.log("handleSendMessageが呼び出されました。");
+            console.log("現在のdb:", db);
+            console.log("現在のuserId:", userId);
+            console.log("現在のuserName:", userName);
+            console.log("メッセージテキスト:", messageText);
+            console.log("画像ファイルが選択されていますか:", !!messageImageFile);
+            console.log("ユーザーアイコンURL:", userIconUrl);
+
+            // Firebaseが準備できていない、またはユーザーがログインしていない場合はメッセージを送信しない
+            if (!db || !userId || !userName) {
+                console.warn("メッセージを送信できません: Firebaseが準備できていないか、ユーザーがログインしていません。");
+                showMessageBox("メッセージを送信できません。ログイン状態を確認してください。");
+                return;
+            }
+
+            let messageData = {
+                userId: userId,
+                userName: userName,
+                userIconUrl: userIconUrl,
+                timestamp: serverTimestamp() // サーバータイムスタンプを使用
+            };
+
+            if (messageImageFile) {
+                // 画像ファイルがある場合、Base64に変換してメッセージデータに含める
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64data = reader.result;
+                    messageData.imageUrl = base64data;
+                    messageData.imageMimeType = messageImageFile.type;
+                    messageData.messageText = messageText; // 画像に添えるテキストも送信
+
+                    try {
+                        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                        const messagesCollectionRef = collection(db, `artifacts/${appId}/public/data/messages`);
+                        await addDoc(messagesCollectionRef, messageData); // Firestoreにメッセージを追加
+                        messageInputElem.value = ''; // 入力フィールドをクリア
+                        clearImageSelection(); // 画像選択をクリア
+                        console.log("画像メッセージが正常に送信されました。");
+                    } catch (error) {
+                        console.error("画像メッセージの送信エラー:", error);
+                        showMessageBox("画像の送信に失敗しました: " + error.message);
+                    }
+                };
+                reader.readAsDataURL(messageImageFile);
+            } else if (messageText !== '') {
+                // テキストメッセージのみの場合
+                messageData.messageText = messageText;
+                try {
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                    const messagesCollectionRef = collection(db, `artifacts/${appId}/public/data/messages`);
+                    await addDoc(messagesCollectionRef, messageData); // Firestoreにメッセージを追加
+                    messageInputElem.value = ''; // 入力フィールドをクリア
+                    console.log("テキストメッセージが正常に送信されました。");
+                } catch (error) {
+                    console.error("テキストメッセージの送信エラー:", error);
+                    showMessageBox("テキストメッセージの送信に失敗しました: " + error.message);
+                }
+            } else {
+                console.log("メッセージ入力が空のため、送信しません。");
+            }
+        }
+
+        /**
+         * ログアウト処理を行う関数。
+         * Firestoreからユーザーの存在情報を削除し、Firebaseからサインアウトします。
+         */
+        async function performLogout() {
+            if (db && userId) {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const usersCollectionRef = collection(db, `artifacts/${appId}/public/data/activeUsers`);
+                try {
+                    await deleteDoc(doc(usersCollectionRef, userId)); // Firestoreからユーザーの存在を削除
+                } catch (error) {
+                    console.error("ユーザーの存在削除エラー:", error);
+                }
+            }
+
+            if (auth) {
+                try {
+                    await signOut(auth); // Firebaseからサインアウト
+                } catch (error) {
+                    console.error("サインアウトエラー:", error);
+                }
+            }
+            // 状態をリセットし、ログイン画面をレンダリング
+            userName = '';
+            userIconUrl = '';
+            userIconFile = null;
+            userIconPreviewUrl = '';
+            messages = [];
+            window.activeUsers = []; // ログアウト時にwindow.activeUsersをリセット
+            isAuthReady = false;
+            messageImageFile = null;
+
+            // ログイン画面の入力フィールドをクリア (要素が存在する場合のみ)
+            const usernameInput = document.getElementById('username-input');
+            if (usernameInput) {
+                usernameInput.value = '';
+            }
+            const passwordInput = document.getElementById('password-input');
+            if (passwordInput) {
+                passwordInput.value = '';
+            }
+            const loginUserIconUpload = document.getElementById('login-user-icon-upload');
+            if (loginUserIconUpload) {
+                loginUserIconUpload.value = ''; // ファイル入力もクリア
+            }
+
+            logoutConfirmModal.classList.add('hidden'); // ログアウト確認モーダルを非表示
+            renderLoginScreen(); // ログイン画面をレンダリング
+        }
+
+        /**
+         * メッセージに添付する画像ファイルを選択するハンドラ。
+         * @param {Event} e - changeイベントオブジェクト。
+         */
+        function handleImageSelect(e) {
+            const file = e.target.files[0];
+            const imagePreviewContainer = document.getElementById('image-preview-container');
+            const messageImagePreview = document.getElementById('message-image-preview');
+            const messageImageFilename = document.getElementById('message-image-filename');
+
+            if (file) {
+                // 画像ファイル形式の検証
+                if (!file.type.startsWith('image/')) {
+                    showMessageBox('画像ファイルを選択してください。');
+                    messageImageFile = null;
+                    imagePreviewContainer.classList.add('hidden');
+                    e.target.value = null; // ファイル入力をクリア
+                    return;
+                }
+                // ファイルサイズの検証
+                if (file.size > MAX_FILE_SIZE_BYTES) {
+                    showMessageBox(`ファイルサイズが大きすぎます。${MAX_FILE_SIZE_BYTES / 1024}KB以下の画像を選択してください。`);
+                    messageImageFile = null;
+                    imagePreviewContainer.classList.add('hidden');
+                    e.target.value = null; // ファイル入力をクリア
+                    return;
+                }
+
+                messageImageFile = file;
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    messageImagePreview.src = reader.result; // 画像プレビューを設定
+                    messageImageFilename.textContent = file.name; // ファイル名を表示
+                    imagePreviewContainer.classList.remove('hidden'); // プレビューコンテナを表示
+                    // プレビューコンテナのテーマクラスを適用
+                    if (theme === 'dark') {
+                        imagePreviewContainer.classList.remove('bg-gray-100', 'border-gray-200');
+                        imagePreviewContainer.classList.add('bg-gray-800', 'border-gray-700');
+                        messageImageFilename.classList.remove('text-gray-700');
+                        messageImageFilename.classList.add('text-gray-300');
+                    } else {
+                        imagePreviewContainer.classList.remove('bg-gray-800', 'border-gray-700');
+                        imagePreviewContainer.classList.add('bg-gray-100', 'border-gray-200');
+                        messageImageFilename.classList.remove('text-gray-300');
+                        messageImageFilename.classList.add('text-gray-700');
+                    }
+                };
+                reader.readAsDataURL(file); // ファイルをBase64データURLとして読み込む
+            } else {
+                messageImageFile = null;
+                imagePreviewContainer.classList.add('hidden');
+            }
+        }
+
+        /**
+         * 選択した画像メッセージをクリアする関数。
+         */
+        function clearImageSelection() {
+            messageImageFile = null;
+            document.getElementById('image-preview-container').classList.add('hidden');
+            document.getElementById('image-upload').value = ''; // ファイル入力をクリア
+        }
+
+        /**
+         * ユーザーアイコンファイルを選択するハンドラ。ログイン画面と設定モーダルで共有。
+         * @param {Event} e - changeイベントオブジェクト。
+         */
+        function handleUserIconSelect(e) {
+            const file = e.target.files[0];
+            const isLoginScreen = e.target.id === 'login-user-icon-upload';
+            // 適切なプレビュー要素、デフォルトアイコン要素、クリアボタン要素を取得
+            const previewElem = isLoginScreen ? document.getElementById('login-user-icon-preview') : settingsUserIconPreview;
+            const defaultIconElem = isLoginScreen ? document.getElementById('login-default-user-icon') : settingsDefaultUserIcon;
+            const clearBtn = isLoginScreen ? document.getElementById('clear-login-user-icon-btn') : clearSettingsUserIconBtn;
+
+            if (file) {
+                // 画像ファイル形式の検証
+                if (!file.type.startsWith('image/')) {
+                    showMessageBox('画像ファイルを選択してください。');
+                    userIconFile = null;
+                    userIconPreviewUrl = '';
+                    previewElem.classList.add('hidden');
+                    defaultIconElem.classList.remove('hidden');
+                    clearBtn.classList.add('hidden');
+                    e.target.value = null;
+                    return;
+                }
+                // ファイルサイズの検証
+                if (file.size > MAX_FILE_SIZE_BYTES) {
+                    showMessageBox(`ファイルサイズが大きすぎます。${MAX_FILE_SIZE_BYTES / 1024}KB以下の画像を選択してください。`);
+                    userIconFile = null;
+                    userIconPreviewUrl = '';
+                    previewElem.classList.add('hidden');
+                    defaultIconElem.classList.remove('hidden');
+                    clearBtn.classList.add('hidden');
+                    e.target.value = null;
+                    return;
+                }
+
+                userIconFile = file;
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    userIconPreviewUrl = reader.result; // プレビューURLを設定
+                    previewElem.src = userIconPreviewUrl; // プレビュー画像を設定
+                    previewElem.classList.remove('hidden'); // プレビューを表示
+                    defaultIconElem.classList.add('hidden'); // デフォルトアイコンを非表示
+                    clearBtn.classList.remove('hidden'); // クリアボタンを表示
+                };
+                reader.readAsDataURL(file); // ファイルをBase64データURLとして読み込む
+            } else {
+                // ファイルが選択されていない場合、状態をリセット
+                userIconFile = null;
+                userIconPreviewUrl = '';
+                previewElem.classList.add('hidden');
+                defaultIconElem.classList.remove('hidden');
+                clearBtn.classList.add('hidden');
+            }
+        }
+
+        /**
+         * ユーザーアイコン選択をクリアする関数。
+         * ログイン画面と設定モーダルの両方の状態をリセットします。
+         */
+        function clearUserIconSelection() {
+            userIconFile = null;
+            userIconPreviewUrl = '';
+            // ログイン画面の要素をクリア
+            const loginPreview = document.getElementById('login-user-icon-preview');
+            const loginDefault = document.getElementById('login-default-user-icon');
+            const loginClearBtn = document.getElementById('clear-login-user-icon-btn');
+            if (loginPreview) loginPreview.classList.add('hidden');
+            if (loginDefault) loginDefault.classList.remove('hidden');
+            if (loginClearBtn) loginClearBtn.classList.add('hidden');
+            const loginUserIconUpload = document.getElementById('login-user-icon-upload');
+            if (loginUserIconUpload) loginUserIconUpload.value = '';
+
+            // 設定モーダルの要素をクリア
+            settingsUserIconPreview.classList.add('hidden');
+            settingsDefaultUserIcon.classList.remove('hidden');
+            clearSettingsUserIconBtn.classList.add('hidden');
+            settingsUserIconUpload.value = '';
+        }
+
+        /**
+         * チャットメッセージボックスを一番下までスクロールする関数。
+         */
+        function scrollToBottom() {
+            const chatMessageBox = document.getElementById('chat-message-box');
+            if (chatMessageBox) {
+                chatMessageBox.scrollTop = chatMessageBox.scrollHeight;
+            }
+        }
+
+        /**
+         * チャットメッセージボックスのスクロールイベントを処理する関数。
+         * 「一番下へスクロール」ボタンの表示/非表示を制御します。
+         */
+        function handleScroll() {
+            const chatMessageBox = document.getElementById('chat-message-box');
+            const scrollToBottomBtn = document.getElementById('scroll-to-bottom-btn');
+            if (chatMessageBox && scrollToBottomBtn) {
+                const { scrollTop, scrollHeight, clientHeight } = chatMessageBox;
+                // スクロール位置が一番下から100px以上離れている場合にボタンを表示
+                if (scrollHeight - scrollTop > clientHeight + 100) {
+                    scrollToBottomBtn.classList.remove('hidden');
+                } else {
+                    scrollToBottomBtn.classList.add('hidden');
+                }
+            }
+        }
+
+        /**
+         * プロフィール（ユーザー名とアイコン）を更新する関数。
+         */
+        async function handleUpdateProfile() {
+            const newName = newUserNameInput.value.trim();
+            let hasChanges = false;
+            let updateData = {};
+
+            // ユーザー名に変更があるかチェック
+            if (newName !== '' && newName !== userName) {
+                updateData.userName = newName;
+                hasChanges = true;
+            }
+
+            if (userIconFile) {
+                // 新しいアイコンファイルが選択された場合、Base64に変換して更新
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    updateData.userIconUrl = reader.result;
+                    try {
+                        await updateFirestoreProfile(updateData);
+                        userName = updateData.userName || userName; // ユーザー名を更新
+                        userIconUrl = updateData.userIconUrl; // アイコンURLを更新
+                        showMessageBox('プロフィールを更新しました！');
+                        settingsModal.classList.add('hidden');
+                        newUserNameInput.value = '';
+                        clearUserIconSelection();
+                        renderChatMessages(); // 更新されたアイコンを表示するためにメッセージを再レンダリング
+                    } catch (error) {
+                        console.error("アイコン付きプロフィールの更新エラー:", error);
+                        showMessageBox('プロフィールの更新に失敗しました。');
+                    }
+                };
+                reader.readAsDataURL(userIconFile);
+            } else if (hasChanges || (!userIconPreviewUrl && userIconUrl)) {
+                // 変更があるか、アイコンがクリアされた場合
+                if (!userIconPreviewUrl && userIconUrl) { // プレビューがクリアされ、既存のアイコンがあった場合
+                    updateData.userIconUrl = ''; // アイコンURLを空にする
+                }
+                try {
+                    await updateFirestoreProfile(updateData);
+                    userName = updateData.userName || userName;
+                    if (updateData.hasOwnProperty('userIconUrl')) userIconUrl = updateData.userIconUrl;
+                    showMessageBox('プロフィールを更新しました！');
+                    settingsModal.classList.add('hidden');
+                    newUserNameInput.value = '';
+                    clearUserIconSelection();
+                    renderChatMessages(); // 更新されたアイコンを表示するためにメッセージを再レンダリング
+                } catch (error) {
+                    console.error("プロフィールの更新エラー:", error);
+                    showMessageBox('プロフィールの更新に失敗しました。');
+                }
+            } else {
+                showMessageBox('変更がありません。');
+            }
+        }
+
+        /**
+         * Firestoreのユーザープロフィールを更新する関数。
+         * @param {object} data - 更新するデータオブジェクト。
+         */
+        async function updateFirestoreProfile(data) {
+            if (!db || !userId) {
+                throw new Error("FirestoreまたはuserIdが準備できていません。");
+            }
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const userDocRef = doc(db, `artifacts/${appId}/public/data/activeUsers`, userId);
+            await updateDoc(userDocRef, data);
+        }
+
+        /**
+         * ローカルのチャット履歴をクリアする関数。
+         */
+        function handleClearLocalChat() {
+            messages = []; // メッセージ配列を空にする
+            renderChatMessages(); // UIからメッセージをクリア
+            showMessageBox('チャット履歴をクリアしました (ローカル)。');
+            settingsModal.classList.add('hidden');
+        }
+
+        /**
+         * テーマ（ライト/ダーク）を切り替える関数。
+         */
+        function toggleTheme() {
+            theme = theme === 'light' ? 'dark' : 'light';
+            localStorage.setItem('chat-theme', theme); // localStorageにテーマを保存
+            applyTheme(); // テーマを適用
+            renderChatMessages(); // メッセージバブルにテーマを適用するためにチャットメッセージを再レンダリング
+        }
+
+        /**
+         * オンラインユーザーモーダルを表示する関数。
+         */
+        function showActiveUsersModal() {
+            activeUsersModal.classList.remove('hidden');
+            // アニメーションを適用
+            activeUsersModal.querySelector('div:first-child').classList.add('animate-scale-in');
+            renderActiveUsers(); // オンラインユーザーリストをレンダリング
+            applyTheme(); // モーダル要素にテーマが正しく適用されるようにする
+        }
+
+        /**
+         * 設定モーダルを表示する関数。
+         */
+        function showSettingsModalHandler() {
+            settingsModal.classList.remove('hidden');
+            // アニメーションを適用
+            settingsModal.querySelector('div:first-child').classList.add('animate-scale-in');
+
+            newUserNameInput.value = userName; // 現在のユーザー名で入力フィールドを事前入力
+            userIconPreviewUrl = userIconUrl; // 現在のアイコンプレビューを事前入力
+            if (userIconPreviewUrl) {
+                settingsUserIconPreview.src = userIconPreviewUrl;
+                settingsUserIconPreview.classList.remove('hidden');
+                settingsDefaultUserIcon.classList.add('hidden');
+                clearSettingsUserIconBtn.classList.remove('hidden');
+            } else {
+                settingsUserIconPreview.classList.add('hidden');
+                settingsDefaultUserIcon.classList.remove('hidden');
+                clearSettingsUserIconBtn.classList.add('hidden');
+            }
+            themeToggleSwitch.checked = theme === 'dark'; // トグルスイッチの状態を設定
+            applyTheme(); // モーダル要素にテーマが正しく適用されるようにする
+        }
+
+        /**
+         * チャットメッセージをレンダリングする関数。
+         * メッセージリストに基づいてUIを更新します。
+         */
+        function renderChatMessages() {
+            const chatMessageBox = document.getElementById('chat-message-box');
+            if (!chatMessageBox) return;
+
+            chatMessageBox.innerHTML = ''; // 既存のメッセージをクリア
+
+            if (messages.length === 0) {
+                const noMessageText = document.createElement('p');
+                noMessageText.className = `text-center italic text-base ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`;
+                noMessageText.textContent = 'まだメッセージはありません。最初のメッセージを送信してください！';
+                chatMessageBox.appendChild(noMessageText);
+            } else {
+                messages.forEach(msg => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = `flex mb-4 ${msg.userId === userId ? 'justify-end' : 'justify-start'}`;
+
+                    const contentWrapper = document.createElement('div');
+                    contentWrapper.className = 'flex items-start gap-2';
+
+                    const iconDiv = document.createElement('div');
+                    iconDiv.className = 'flex-shrink-0';
+                    const iconSizeClass = 'h-8 w-8'; // チャットアイコンの一貫したサイズ
+                    if (msg.userIconUrl) {
+                        const img = document.createElement('img');
+                        img.src = msg.userIconUrl;
+                        img.alt = 'ユーザーアイコン';
+                        img.className = `${iconSizeClass} rounded-full object-cover shadow-sm`;
+                        iconDiv.appendChild(img);
+                    } else {
+                        iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="${iconSizeClass} text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a4 4 0 00-4 4h8a4 4 0 00-4-4z" clip-rule="evenodd" />
+                        </svg>`;
+                    }
+
+                    const messageBubble = document.createElement('div');
+                    messageBubble.className = `max-w-[75%] p-4 rounded-xl shadow-md ${
+                        msg.userId === userId
+                            ? 'bg-blue-600 text-white rounded-br-none'
+                            : `${theme === 'dark' ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-800'} rounded-bl-none`
+                    }`;
+
+                    const senderName = document.createElement('div');
+                    senderName.className = 'font-semibold text-sm mb-1';
+                    senderName.textContent = msg.userId === userId ? 'あなた' : msg.userName || '匿名ユーザー';
+                    messageBubble.appendChild(senderName);
+
+                    if (msg.imageUrl) {
+                        const img = document.createElement('img');
+                        img.src = msg.imageUrl;
+                        img.alt = 'チャット画像';
+                        img.className = 'max-w-full h-auto rounded-lg mb-2';
+                        img.style.maxHeight = '200px'; // 画像の最大高さを制限
+                        messageBubble.appendChild(img);
+                    }
+
+                    if (msg.messageText) {
+                        const p = document.createElement('p');
+                        p.className = 'text-lg leading-relaxed break-words';
+                        p.textContent = msg.messageText;
+                        messageBubble.appendChild(p);
+                    }
+
+                    const timestampDiv = document.createElement('div');
+                    timestampDiv.className = 'text-xs text-right mt-1 text-gray-200 opacity-90';
+                    timestampDiv.textContent = msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString('ja-JP') : '送信中...';
+                    messageBubble.appendChild(timestampDiv);
+
+                    if (msg.userId === userId) {
+                        contentWrapper.appendChild(messageBubble);
+                        contentWrapper.appendChild(iconDiv);
+                    } else {
+                        contentWrapper.appendChild(iconDiv);
+                        contentWrapper.appendChild(messageBubble);
+                    }
+                    messageDiv.appendChild(contentWrapper);
+                    chatMessageBox.appendChild(messageDiv);
+                });
+            }
+            scrollToBottom(); // 新しいメッセージが追加されたら一番下までスクロール
+        }
+
+        /**
+         * オンラインユーザーリストをレンダリングする関数。
+         */
+        function renderActiveUsers() {
+            activeUsersList.innerHTML = ''; // 既存のユーザーをクリア
+            activeUsersCount.textContent = window.activeUsers.length; // window.activeUsersを使用
+
+            if (window.activeUsers.length === 0) { // window.activeUsersを使用
+                const noUserText = document.createElement('p');
+                noUserText.className = `${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`;
+                noUserText.textContent = '現在、オンラインユーザーはいません。';
+                activeUsersList.appendChild(noUserText);
+            } else {
+                window.activeUsers.forEach(user => { // window.activeUsersを使用
+                    const li = document.createElement('li');
+                    li.className = `flex items-center py-1 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`;
+
+                    const iconDiv = document.createElement('div');
+                    iconDiv.className = 'flex-shrink-0 mr-2';
+                    if (user.userIconUrl) {
+                        const img = document.createElement('img');
+                        img.src = user.userIconUrl;
+                        img.alt = 'ユーザーアイコン';
+                        img.className = 'h-8 w-8 rounded-full object-cover';
+                        iconDiv.appendChild(img);
+                    } else {
+                        iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a4 4 0 00-4 4h8a4 4 0 00-4-4z" clip-rule="evenodd" />
+                        </svg>`;
+                    }
+                    li.appendChild(iconDiv);
+                    li.appendChild(document.createTextNode(user.userName));
+                    activeUsersList.appendChild(li);
+                });
+            }
+        }
+
+        // --- 初期化 ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            applyTheme(); // bodyとルートコンテナに初期テーマを適用
+
+            try {
+                // 環境変数からFirebase設定、アプリID、初期認証トークンを取得
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
+
+                // Firebaseアプリ、Firestore、Authを初期化
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // 認証状態の変更を監視
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        // ユーザーがログインしている場合
+                        userId = user.uid;
+                        isAuthReady = true;
+
+                        // ユーザーのプロフィールデータ（名前とアイコン）をFirestoreから取得
+                        const usersCollectionRef = collection(db, `artifacts/${appId}/public/data/activeUsers`);
+                        const userDocRef = doc(usersCollectionRef, userId);
+                        const userDocSnap = await getDoc(userDocRef);
+
+                        let fetchedUserName = '';
+                        let fetchedUserIconUrl = '';
+
+                        if (userDocSnap.exists()) {
+                            // ユーザーデータが存在する場合
+                            const userData = userDocSnap.data();
+                            fetchedUserName = userData.userName || ''; // Firestoreからユーザー名を取得 (空の場合も考慮)
+                            fetchedUserIconUrl = userData.userIconUrl || '';
+                        }
+
+                        userName = fetchedUserName; // グローバル変数にユーザー名を割り当て
+                        userIconUrl = fetchedUserIconUrl;
+                        userIconPreviewUrl = userIconUrl; // 設定/ログイン用のプレビューを設定
+
+                        // ユーザー名がまだ空の場合、ログイン画面をレンダリングして名前入力を強制
+                        if (!userName) {
+                            renderLoginScreen();
+                            return; // ここで処理を停止し、ユーザーが名前を入力するのを待つ
+                        }
+                        
+                        renderChatScreen(); // ユーザー名が設定されていることを確認してからチャット画面をレンダリング
+                        
+                        // 認証準備完了後、Firestoreリスナーを設定
+                        const messagesCollectionRef = collection(db, `artifacts/${appId}/public/data/messages`);
+                        onSnapshot(query(messagesCollectionRef, orderBy('timestamp', 'asc')), (snapshot) => {
+                            messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            renderChatMessages();
+                        }, (error) => {
+                            console.error("メッセージの取得エラー:", error);
+                        });
+
+                        const activeUsersCollectionRef = collection(db, `artifacts/${appId}/public/data/activeUsers`);
+                        onSnapshot(activeUsersCollectionRef, (snapshot) => {
+                            window.activeUsers = snapshot.docs.map(doc => doc.data()); // window.activeUsersに割り当て
+                            if (activeUsersModal.classList.contains('hidden')) {
+                                // モーダルが非表示の場合のみカウントを更新し、リストの頻繁な再レンダリングを避ける
+                                document.getElementById('online-users-count').textContent = window.activeUsers.length; // window.activeUsersを使用
+                            } else {
+                                renderActiveUsers(); // モーダルが開いている場合は再レンダリング
+                            }
+                        }, (error) => {
+                            console.error("オンラインユーザーの取得エラー:", error);
+                        });
+
+                    } else {
+                        // ユーザーがサインアウトしている場合、匿名またはカスタムトークンでサインインを試みる
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("認証エラー:", error);
+                            renderLoginScreen(); // 匿名/カスタムトークンでのサインイン失敗時はログイン画面を表示
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase初期化エラー:", error);
+                renderLoginScreen(); // 初期化エラー発生時はログイン画面にフォールバック
+            }
+        });
+    </script>
+</body>
+</html>
