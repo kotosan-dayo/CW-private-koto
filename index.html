@@ -3,200 +3,376 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WC Dev by Gemini</title>
+    <title>グループチャット</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        /* 基本フォント設定 */
         body {
             font-family: 'Inter', sans-serif;
-            /* 淡いカラフルなグラデーション背景 */
-            background: linear-gradient(135deg, #e6e9f0 0%, #eef1f5 100%);
-            background-color: #e2e8f0;
         }
-        .chat-container {
-            height: 85vh;
-            max-width: 960px;
+        /* カスタムスクロールバースタイル */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
         }
-        .chat-header {
-            background-color: #2d3748;
-            color: white;
-            border-bottom: 2px solid #4a5568;
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
         }
-        .chat-messages {
-            height: calc(100% - 13rem);
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
         }
-        .message-box {
-            background-color: #f7fafc;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            border: 1px solid #e2e8f0;
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
-        .message {
-            max-width: 75%;
-            word-wrap: break-word;
+        /* モーダル表示時のアニメーション */
+        @keyframes scale-in {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
         }
-        .sent {
-            background-color: #38a169;
-            color: white;
-            border-radius: 18px 18px 0 18px;
+        .animate-scale-in {
+            animation: scale-in 0.3s ease-out forwards;
         }
-        .received {
-            background-color: #e2e8f0;
-            color: #2d3748;
-            border-radius: 18px 18px 18px 0;
+        /* ローディングスピナーのアニメーション */
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
         }
-        .timestamp {
-            font-size: 0.75rem;
-            color: #a0aec0;
-        }
-        .message-input-area {
-            background-color: #ffffff;
-            border-top: 1px solid #e2e8f0;
+        .spinner {
+            border-top-color: #3b82f6; /* Tailwind blue-500 */
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
         }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen">
-    <div class="chat-container w-full bg-white rounded-lg shadow-2xl flex flex-col overflow-hidden">
-        <!-- Chat Header -->
-        <header class="chat-header p-4 flex items-center justify-between shadow-md">
-            <div class="flex items-center">
-                <img src="https://placehold.co/40x40/4c51bf/ffffff?text=GC" alt="Group Chat Icon" class="rounded-full mr-3">
-                <h2 class="text-xl font-bold">グループチャット</h2>
-            </div>
-            <div id="user-id-display" class="bg-gray-700 text-xs font-mono px-3 py-1 rounded-full">ユーザーID: </div>
-        </header>
+<body class="min-h-screen flex items-center justify-center p-4 font-inter bg-gradient-to-br from-blue-100 to-purple-200">
+    <!-- アプリのルートコンテナ -->
+    <div id="app-root" class="shadow-2xl w-full flex flex-col max-w-2xl h-[80vh] rounded-3xl p-4 bg-white">
+        <!-- JavaScriptによってコンテンツがここにレンダリングされます -->
+    </div>
 
-        <!-- Message Area -->
-        <div id="messages" class="chat-messages p-6 flex-1 overflow-y-auto space-y-4">
-            <!-- Messages will be injected here by JavaScript -->
-        </div>
-
-        <!-- Message Input -->
-        <div class="message-input-area p-4 flex items-center">
-            <input type="text" id="message-input" placeholder="メッセージを入力..." class="flex-1 p-3 rounded-full bg-gray-100 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500">
-            <button id="send-button" class="ml-3 px-6 py-3 bg-green-500 text-white font-semibold rounded-full hover:bg-green-600 transition-colors duration-200 shadow-lg">送信</button>
+    <!-- カスタムメッセージボックス (alertの代わり) -->
+    <div id="custom-message-box" class="hidden fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300">
+        <div class="p-6 rounded-lg shadow-xl text-center transform transition-transform duration-300 scale-95 opacity-0 animate-scale-in max-w-sm w-full bg-white text-gray-800">
+            <p id="custom-message-text" class="text-lg font-semibold mb-4"></p>
+            <button id="custom-message-ok-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                OK
+            </button>
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
+    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, onSnapshot, collection, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // グローバル変数
+        const __firebase_config = typeof window.__firebase_config !== 'undefined' ? window.__firebase_config : '{}';
+        const __app_id = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-app-id';
+        const __initial_auth_token = typeof window.__initial_auth_token !== 'undefined' ? window.__initial_auth_token : null;
 
-        // Firebase設定の初期化
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // グローバルなFirebaseインスタンス
+        let app = null;
+        let db = null;
+        let auth = null;
+        let userId = '';
+        let userName = '';
 
-        let db, auth;
-        let userId;
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
+        // DOM要素の取得
+        const appRoot = document.getElementById('app-root');
+        const customMessageBox = document.getElementById('custom-message-box');
+        const customMessageText = document.getElementById('custom-message-text');
+        const customMessageOkBtn = document.getElementById('custom-message-ok-btn');
 
-        // 認証処理
-        async function authenticate() {
-            try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Firebase authentication error:", error);
+        // Firestoreのコレクションパス
+        const messagesCollectionPath = `artifacts/${__app_id}/public/data/messages`;
+
+        /**
+         * カスタムメッセージボックスを表示する関数。
+         * @param {string} message - 表示するメッセージテキスト。
+         */
+        function showMessageBox(message) {
+            customMessageText.textContent = message;
+            customMessageBox.classList.remove('hidden');
+            customMessageBox.querySelector('div:first-child').classList.add('animate-scale-in');
+        }
+
+        /**
+         * カスタムメッセージボックスを非表示にする関数。
+         */
+        function hideMessageBox() {
+            customMessageBox.classList.add('hidden');
+            customMessageBox.querySelector('div:first-child').classList.remove('animate-scale-in');
+        }
+
+        /**
+         * ローディング画面をレンダリングする関数。
+         */
+        function renderLoadingScreen() {
+            appRoot.className = "shadow-2xl w-full flex flex-col max-w-2xl h-[80vh] rounded-3xl p-4 bg-white text-gray-800";
+            appRoot.innerHTML = `
+                <div class="flex flex-col items-center justify-center flex-grow p-8">
+                    <div class="spinner h-12 w-12 border-4 border-gray-200 rounded-full mb-4"></div>
+                    <p class="text-lg text-gray-700">読み込み中...</p>
+                </div>
+            `;
+        }
+
+        /**
+         * ログイン画面をレンダリングする関数。
+         */
+        function renderLoginScreen() {
+            appRoot.className = "shadow-2xl w-full flex flex-col max-w-2xl h-[80vh] rounded-3xl p-4 bg-white text-gray-800";
+            appRoot.innerHTML = `
+                <h1 class="text-2xl font-extrabold mb-2 text-center text-gray-800">グループチャット</h1>
+                <div class="flex flex-col items-center justify-center flex-grow p-8">
+                    <p class="text-lg mb-6 text-center text-gray-700">チャットに参加するために名前を入力してください</p>
+                    <input type="text" id="username-input" placeholder="あなたの名前" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base mb-4 text-center" />
+                    <p id="error-message" class="text-red-500 text-sm mb-4 hidden"></p>
+                    <button id="login-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                        チャットに参加
+                    </button>
+                    <p class="absolute bottom-4 left-4 text-xs text-gray-500">
+                        Made by Gemini
+                    </p>
+                </div>
+            `;
+            attachLoginEventListeners();
+        }
+
+        /**
+         * チャット画面をレンダリングする関数。
+         * @param {Array<Object>} messages - 表示するメッセージの配列。
+         */
+        function renderChatScreen(messages = []) {
+            appRoot.className = "shadow-2xl w-full flex flex-col max-w-full h-screen rounded-none p-4 bg-white text-gray-800 transition-all duration-700 ease-out opacity-100 scale-100";
+            appRoot.innerHTML = `
+                <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-200">
+                    <p class="text-gray-600 text-sm">
+                        あなたのユーザーID: <span class="font-semibold text-blue-700">${userId}</span>
+                    </p>
+                    <p class="text-gray-600 text-sm">
+                        あなたの名前: <span class="font-semibold text-purple-700">${userName}</span>
+                    </p>
+                </div>
+                <div id="chat-message-box" class="flex-grow overflow-y-auto p-4 bg-gray-50 rounded-lg mb-4 shadow-inner custom-scrollbar">
+                    <!-- メッセージがここにレンダリングされます -->
+                </div>
+                <div class="flex gap-3">
+                    <input type="text" id="message-input" placeholder="メッセージを入力..." class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <button id="send-message-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                        送信
+                    </button>
+                </div>
+            `;
+            renderMessages(messages);
+            attachChatEventListeners();
+            scrollToBottom();
+        }
+
+        /**
+         * メッセージを表示する関数。
+         * @param {Array<Object>} messages - 表示するメッセージの配列。
+         */
+        function renderMessages(messages) {
+            const chatMessageBox = document.getElementById('chat-message-box');
+            if (!chatMessageBox) return;
+
+            chatMessageBox.innerHTML = '';
+            
+            if (messages.length === 0) {
+                const noMessageText = document.createElement('p');
+                noMessageText.className = 'text-center text-gray-500 italic';
+                noMessageText.textContent = 'まだメッセージはありません。最初のメッセージを送信してください！';
+                chatMessageBox.appendChild(noMessageText);
+            } else {
+                messages.forEach(msg => {
+                    const isMyMessage = msg.userId === userId;
+                    
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = `flex mb-3 ${isMyMessage ? 'justify-end' : 'justify-start'}`;
+
+                    const messageBubble = document.createElement('div');
+                    messageBubble.className = `max-w-[70%] p-3 rounded-xl shadow-sm ${
+                        isMyMessage ? 'bg-blue-500 text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'
+                    }`;
+
+                    const senderName = document.createElement('div');
+                    senderName.className = 'font-bold text-sm mb-1';
+                    senderName.textContent = isMyMessage ? 'あなた' : msg.userName || '匿名ユーザー';
+                    messageBubble.appendChild(senderName);
+
+                    const p = document.createElement('p');
+                    p.className = 'text-base break-words';
+                    p.textContent = msg.messageText;
+                    messageBubble.appendChild(p);
+
+                    const timestampDiv = document.createElement('div');
+                    timestampDiv.className = 'text-xs text-right mt-1 opacity-75';
+                    timestampDiv.textContent = msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString('ja-JP') : '送信中...';
+                    messageBubble.appendChild(timestampDiv);
+                    
+                    messageDiv.appendChild(messageBubble);
+                    chatMessageBox.appendChild(messageDiv);
+                });
             }
         }
 
-        // 認証状態の変更を監視
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                userId = user.uid;
-                const userIdDisplay = document.getElementById('user-id-display');
-                if (userIdDisplay) {
-                    userIdDisplay.textContent = `ユーザーID: ${userId.substring(0, 8)}...`;
-                }
-                console.log("User authenticated:", userId);
-                setupChat();
-            } else {
-                console.log("No user is signed in.");
+        function scrollToBottom() {
+            const chatMessageBox = document.getElementById('chat-message-box');
+            if (chatMessageBox) {
+                chatMessageBox.scrollTop = chatMessageBox.scrollHeight;
+            }
+        }
+
+        // --- イベントリスナーとハンドラ ---
+        function attachLoginEventListeners() {
+            const loginBtn = document.getElementById('login-btn');
+            const usernameInput = document.getElementById('username-input');
+
+            if (loginBtn) {
+                loginBtn.onclick = handleSetUserName;
+            }
+            if (usernameInput) {
+                usernameInput.onkeypress = (e) => { if (e.key === 'Enter') handleSetUserName(); };
+            }
+        }
+
+        function attachChatEventListeners() {
+            const sendMessageBtn = document.getElementById('send-message-btn');
+            const messageInput = document.getElementById('message-input');
+
+            if (sendMessageBtn) {
+                sendMessageBtn.onclick = handleSendMessage;
+            }
+            if (messageInput) {
+                messageInput.onkeypress = (e) => { if (e.key === 'Enter') handleSendMessage(); };
+            }
+            if (customMessageOkBtn) {
+                customMessageOkBtn.onclick = hideMessageBox;
+            }
+        }
+
+        async function handleSetUserName() {
+            const usernameInput = document.getElementById('username-input');
+            const errorMessageElem = document.getElementById('error-message');
+            const newName = usernameInput.value.trim();
+
+            if (newName === '') {
+                errorMessageElem.textContent = '名前を入力してください。';
+                errorMessageElem.classList.remove('hidden');
+                return;
+            }
+
+            errorMessageElem.classList.add('hidden');
+            userName = newName;
+            renderChatScreen();
+
+            // ここでFirebaseのonSnapshotリスナーをアタッチ
+            attachMessageListener();
+        }
+
+        async function handleSendMessage() {
+            const messageInputElem = document.getElementById('message-input');
+            const messageText = messageInputElem.value.trim();
+
+            if (messageText === '' || !db || !userId || !userName) {
+                return;
+            }
+
+            try {
+                await addDoc(collection(db, messagesCollectionPath), {
+                    userId: userId,
+                    userName: userName,
+                    messageText: messageText,
+                    timestamp: serverTimestamp()
+                });
+                messageInputElem.value = '';
+            } catch (error) {
+                console.error("メッセージ送信エラー:", error);
+                showMessageBox("メッセージの送信に失敗しました。もう一度お試しください。");
+            }
+        }
+
+        /**
+         * FirestoreのonSnapshotリスナーをアタッチする関数。
+         */
+        function attachMessageListener() {
+            if (!db || !userId) {
+                console.error("Firestoreまたはユーザーが未初期化です。");
+                return;
+            }
+
+            const q = query(collection(db, messagesCollectionPath), orderBy('timestamp', 'asc'));
+            
+            onSnapshot(q, (snapshot) => {
+                const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderMessages(messages);
+                scrollToBottom();
+            }, (error) => {
+                console.error("メッセージのリアルタイム更新エラー:", error);
+                showMessageBox("チャットデータの読み込み中にエラーが発生しました。");
+            });
+        }
+        
+        // --- 初期化 ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            renderLoadingScreen(); // 最初にローディング画面を表示
+            
+            try {
+                // Firebaseを初期化
+                const firebaseConfig = JSON.parse(__firebase_config);
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // 認証
+                await new Promise(resolve => {
+                    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            unsubscribe();
+                            resolve();
+                        } else {
+                            try {
+                                if (__initial_auth_token) {
+                                    await signInWithCustomToken(auth, __initial_auth_token);
+                                } else {
+                                    await signInAnonymously(auth);
+                                }
+                            } catch (error) {
+                                console.error("認証エラー:", error);
+                                showMessageBox("認証エラーが発生しました。");
+                            }
+                        }
+                    });
+                });
+
+                // 認証が完了したらログイン画面へ
+                renderLoginScreen();
+            } catch (error) {
+                console.error("Firebase初期化エラー:", error);
+                showMessageBox("アプリケーションの初期化に失敗しました。");
+            }
+
+            if (customMessageOkBtn) {
+                customMessageOkBtn.onclick = hideMessageBox;
             }
         });
-        authenticate();
-
-        // チャット機能のセットアップ
-        function setupChat() {
-            const messageInput = document.getElementById('message-input');
-            const sendButton = document.getElementById('send-button');
-            const messagesContainer = document.getElementById('messages');
-            
-            // Firebaseのコレクションパスを定義
-            const messagesRef = collection(db, 'artifacts', appId, 'public', 'data', 'messages');
-
-            // メッセージ送信関数
-            async function sendMessage() {
-                const messageText = messageInput.value.trim();
-                if (messageText === '') return;
-
-                try {
-                    await addDoc(messagesRef, {
-                        userId: userId,
-                        text: messageText,
-                        timestamp: serverTimestamp()
-                    });
-                    messageInput.value = ''; // 入力欄をクリア
-                } catch (e) {
-                    console.error("Error adding document: ", e);
-                }
-            }
-
-            sendButton.addEventListener('click', sendMessage);
-            messageInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    sendMessage();
-                }
-            });
-
-            // リアルタイムリスナーでメッセージを読み込む
-            onSnapshot(query(messagesRef, orderBy('timestamp', 'asc')), (snapshot) => {
-                // DOM操作を効率化するために新しいメッセージのみを処理
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type === "added") {
-                        const messageData = change.doc.data();
-                        const messageElement = createMessageElement(messageData);
-                        messagesContainer.appendChild(messageElement);
-                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                    }
-                });
-            }, (error) => {
-                console.error("Error getting messages: ", error);
-            });
-        }
-
-        // メッセージ要素を作成する関数
-        function createMessageElement(data) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `flex items-start mb-4 ${data.userId === userId ? 'justify-end' : ''}`;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = `message p-4 rounded-lg shadow-md ${data.userId === userId ? 'sent' : 'received'}`;
-            contentDiv.textContent = data.text;
-            
-            const timestampSpan = document.createElement('span');
-            timestampSpan.className = `block mt-1 ${data.userId === userId ? 'text-right' : 'text-left'} timestamp`;
-            
-            if (data.timestamp) {
-                const date = data.timestamp.toDate();
-                timestampSpan.textContent = date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-            } else {
-                timestampSpan.textContent = '送信中...';
-            }
-
-            contentDiv.appendChild(timestampSpan);
-            messageDiv.appendChild(contentDiv);
-            return messageDiv;
-        }
-
     </script>
 </body>
 </html>
